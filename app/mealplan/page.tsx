@@ -64,9 +64,20 @@ export default function MealPlanDashboard() {
     mutate(payload);
   }
 
-  if (data) {
-    console.log(data);
-  }
+  const daysOfTheWeek = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  const getMealPlanForDay = (day: string): DailyMealPlan | undefined => {
+    if (!data?.mealPlan) return undefined;
+    return data?.mealPlan[day];
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -169,7 +180,7 @@ export default function MealPlanDashboard() {
               <button
                 type="submit"
                 disabled={isPending}
-                className="w-full bg-emerald-500 text-white py-2 px-4 rounded-md hover:bg-emerald-600 transition-colors"
+                className={`w-full bg-emerald-500 text-white py-2 px-4 rounded-md hover:bg-emerald-600 transition-colors`}
               >
                 {isPending ? "Generating..." : "Generate Meal Plan"}
               </button>
@@ -184,11 +195,52 @@ export default function MealPlanDashboard() {
           </h2>
 
           {data?.mealPlan && isSuccess ? (
-            <div></div>
+            <div className="h-[600px] overflow-y-auto">
+              <div className="space-y-6">
+                {daysOfTheWeek.map((day, key) => {
+                  const mealPlan = getMealPlanForDay(day);
+                  return (
+                    <div
+                      key={key}
+                      className="bg-white shadow-md rounded-lg p-4 border border-emerald-200"
+                    >
+                      <h3 className="text-xl font-semibold mb-2 text-emerald-600">
+                        {day}
+                      </h3>
+                      {mealPlan ? (
+                        <div className="space-y-2">
+                          <div>
+                            <strong>Breakfast:</strong> {mealPlan.Breakfast}
+                          </div>
+                          <div>
+                            <strong>Lunch:</strong> {mealPlan.Lunch}
+                          </div>
+                          <div>
+                            <strong>Dinner:</strong> {mealPlan.Dinner}
+                          </div>
+                          {mealPlan.Snacks && (
+                            <div>
+                              <strong>Snacks:</strong> {mealPlan.Snacks}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500">No meal plan available.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : isPending ? (
-            <Spinner />
+            <div className="flex justify-center items-center h-full">
+              {/* Spinner */}
+              <Spinner />
+            </div>
           ) : (
-            <p>Please generate a meal plan to see it here.</p>
+            <p className="text-gray-600">
+              Please generate a meal plan to see it here.
+            </p>
           )}
         </div>
       </div>
