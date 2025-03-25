@@ -3,22 +3,46 @@
 import { Spinner } from "@/components/spinner";
 import { availablePlans } from "@/lib/plans";
 import { useUser } from "@clerk/nextjs";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
-import { Toaster } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
 async function fetchSubscriptionStatus() {
   const response = await fetch("/api/profile/subscription-status");
   return response.json();
 }
 
+async function updatePlan(newPlan: string) {
+  const response = await fetch("/api/profile/change-plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPlan }),
+  });
+  return response.json();
+}
+
+async function unsubscribe() {
+  const response = await fetch("/api/profile/unsubscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return response.json();
+}
+
 export default function Profile() {
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
   const { isLoaded, isSignedIn, user } = useUser();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
   const {
     data: subscription,
     isLoading,
     isError,
     error,
+    refetch,
   } = useQuery({
     queryKey: ["subscription"],
     queryFn: fetchSubscriptionStatus,
@@ -26,9 +50,58 @@ export default function Profile() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const {
+    data: updatedPlan,
+    mutate: updatePlanMutation,
+    isPending: isUpdatePlanPending,
+  } = useMutation({
+    mutationFn: updatePlan,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      toast.success("Subscription plan updated successfully!");
+      refetch();
+    },
+    onError: () => {
+      toast.error("Error updating plan.");
+    },
+  });
+
+  const {
+    data: canceledPlan,
+    mutate: unsubscribeMutation,
+    isPending: isUnsubscribePending,
+  } = useMutation({
+    mutationFn: unsubscribe,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      router.push("/subscribe");
+    },
+    onError: () => {
+      toast.error("Error unsubscribing.");
+    },
+  });
+
   const currentPlan = availablePlans.find(
     (plan) => plan.interval === subscription?.subscription.subscriptionTier
   );
+
+  function handleUpdatePlan() {
+    if (selectedPlan) {
+      updatePlanMutation(selectedPlan);
+    }
+
+    setSelectedPlan("");
+  }
+
+  function handleUnsubscribe() {
+    if (
+      confirm(
+        "Are you sure you want to unsubscribe? You will lose access to premium features."
+      )
+    ) {
+      unsubscribeMutation();
+    }
+  }
 
   if (!isLoaded) {
     return (
@@ -110,25 +183,64 @@ export default function Profile() {
                     <p className="text-red-500">Current Plan not Found.</p>
                   )}
                 </div>
+
+                <div className="bg-white shadow-md rounded-lg p-4 border border-emerald-200">
+                  <h3 className="text-xl font-semibold mb-2 text-emerald-600">
+                    Change Subscription Plan
+                  </h3>
+
+                  <select
+                    defaultValue={currentPlan?.interval}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-md text-black focus:outline-none focus:ring"
+                    disabled={isUpdatePlanPending}
+                    onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
+                      setSelectedPlan(event.target.value)
+                    }
+                  >
+                    <option value="" disabled>
+                      Select a New Plan
+                    </option>
+
+                    {availablePlans.map((plan, key) => (
+                      <option key={key} value={plan.interval}>
+                        {plan.name} - ${plan.amount} / {plan.interval}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleUpdatePlan}
+                    className="mt-3 p-2 bg-emerald-500 rounded-lg text-white"
+                  >
+                    Save Change
+                  </button>
+                  {isUpdatePlanPending && (
+                    <div className="flex items-center mt-2">
+                      <Spinner />
+                      <span className="ml-2">Updating Plan...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white shadow-md rounded-lg p-4 border border-emerald-200">
+                  <h3 className="text-xl font-semibold mb-2 text-emerald-600">
+                    Unsubscribe
+                  </h3>
+                  <button
+                    onClick={handleUnsubscribe}
+                    disabled={isUnsubscribePending}
+                    className={`w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors ${
+                      isUnsubscribePending
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    }`}
+                  >
+                    {isUnsubscribePending ? "Unsubscribing..." : "Unsubscribe"}
+                  </button>
+                </div>
               </div>
             ) : (
               <p>You are not subscribed to any plan.</p>
             )}
-          </div>
-
-          <div>
-            <h3>Change Subscription Plan</h3>
-            <select>
-              <option value="" disabled>
-                Select a New Plan
-              </option>
-
-              {availablePlans.map((plan, key) => (
-                <option key={key}>
-                  {plan.name} - ${plan.amount} / {plan.interval}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </div>
